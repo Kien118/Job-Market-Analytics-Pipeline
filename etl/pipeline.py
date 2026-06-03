@@ -13,6 +13,9 @@ from load.load_salary_summary import (
     load_salary_summary
 )
 
+from analytics.build_daily_job_stats import build_daily_job_stats
+from load.load_daily_job_stats import load_daily_job_stats
+
 
 def run_pipeline():
 
@@ -43,6 +46,12 @@ def run_pipeline():
     load_salary_summary(
         salary_summary_df
     )
+
+    daily_job_stats_df = build_daily_job_stats(raw_df)
+
+    load_daily_job_stats(daily_job_stats_df)
+
+    print("Daily job stats mart created")
 
     print(
     "Salary mart created"

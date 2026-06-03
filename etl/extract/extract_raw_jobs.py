@@ -18,7 +18,8 @@ def extract_raw_jobs():
             job_title,
             location,
             salary_text,
-            description
+            description,
+            posted_date
         FROM raw_jobs;
     """
 
