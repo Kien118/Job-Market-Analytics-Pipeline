@@ -21,7 +21,7 @@ The system automatically collects job postings from online sources, stores them 
 
 ## Architecture
 
-![Architecture Diagram](docs/architecture.png)
+![Architecture](docs/architecture.png)
 
 ### Data Flow
 
