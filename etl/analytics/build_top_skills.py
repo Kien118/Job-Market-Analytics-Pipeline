@@ -16,9 +16,18 @@ def build_top_skills(df):
 
             rows.append(
                 {
-                    "skill_name": skill
+                    "skill_name": skill.lower()
                 }
             )
+
+    if len(rows) == 0:
+
+        return pd.DataFrame(
+            columns=[
+                "skill_name",
+                "total_jobs"
+            ]
+        )
 
     skill_df = pd.DataFrame(rows)
 
