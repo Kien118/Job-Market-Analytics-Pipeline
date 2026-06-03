@@ -23,34 +23,6 @@ The system automatically collects job postings from online sources, stores them 
 
 ![Architecture](docs/architecture.png)
 
-### Data Flow
-
-CareerViet Crawler / Public APIs
-
-↓
-
-Raw Layer (PostgreSQL)
-
-↓
-
-ETL Pipeline (Python + Pandas)
-
-↓
-
-Staging Layer
-
-↓
-
-Analytics Marts
-
-↓
-
-Streamlit Dashboard
-
-↓
-
-Automated Daily Refresh (APScheduler)
-
 ---
 
 ## Tech Stack
@@ -214,7 +186,7 @@ Daily execution using APScheduler.
 ### 1. Clone Repository
 
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/Kien118/Job-Market-Analytics-Pipeline.git
 ```
 
 ### 2. Start Infrastructure
