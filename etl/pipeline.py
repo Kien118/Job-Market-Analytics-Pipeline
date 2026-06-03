@@ -5,6 +5,14 @@ from load.load_stg_jobs import load_stg_jobs
 from analytics.build_top_skills import build_top_skills
 from load.load_top_skills import load_top_skills
 
+from analytics.build_salary_summary import (
+    build_salary_summary
+)
+
+from load.load_salary_summary import (
+    load_salary_summary
+)
+
 
 def run_pipeline():
 
@@ -25,6 +33,19 @@ def run_pipeline():
 
     load_top_skills(
         top_skills_df
+    )
+
+    salary_summary_df = (
+        build_salary_summary(
+            transformed_df
+        )
+    )
+    load_salary_summary(
+        salary_summary_df
+    )
+
+    print(
+    "Salary mart created"
     )
 
     print("Top skills mart created")
