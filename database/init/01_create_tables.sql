@@ -94,3 +94,27 @@ CREATE TABLE mart_daily_job_stats (
 );
 
 
+CREATE TABLE IF NOT EXISTS mart_top_skills (
+
+    skill_name TEXT,
+
+    total_jobs INT
+
+);
+
+CREATE TABLE IF NOT EXISTS mart_salary_summary (
+
+    clean_location TEXT,
+
+    avg_salary NUMERIC
+
+);
+
+CREATE TABLE IF NOT EXISTS mart_daily_job_stats (
+
+    posted_date DATE,
+
+    total_jobs INT
+
+);
+

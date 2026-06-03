@@ -18,7 +18,7 @@ def load_stg_jobs(df):
     df.to_sql(
         "stg_jobs",
         engine,
-        if_exists="append",
+        if_exists="replace",
         index=False
     )
 
