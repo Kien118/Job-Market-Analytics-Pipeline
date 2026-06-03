@@ -205,7 +205,7 @@ Daily execution using APScheduler.
 
 ### Main Dashboard
 
-![Dashboard](dashboard/screenshots/dashboard.png)
+![Dashboard](screenshots/dashboard.png)
 
 ---
 
