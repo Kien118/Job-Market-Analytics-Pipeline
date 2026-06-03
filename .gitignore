@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environment
+.env
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PostgreSQL
+postgres_data/
+
+# Docker
+*.pid
+
+# Metabase
+metabase.db.mv.db
+
+# Testing
+.pytest_cache/
+
+# Build
+dist/
+build/

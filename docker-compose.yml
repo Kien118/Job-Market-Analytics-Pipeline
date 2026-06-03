@@ -1,0 +1,53 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: job_market_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - job_market_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: job_market_backend
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "${BACKEND_PORT}:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - ./backend:/app
+    networks:
+      - job_market_network
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: job_market_metabase
+    restart: always
+    ports:
+      - "${METABASE_PORT}:3000"
+    depends_on:
+      - postgres
+    networks:
+      - job_market_network
+
+volumes:
+  postgres_data:
+
+networks:
+  job_market_network:
+    driver: bridge
