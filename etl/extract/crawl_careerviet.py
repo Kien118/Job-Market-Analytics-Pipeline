@@ -11,7 +11,7 @@ BASE_URL = "https://careerviet.vn"
 LISTING_URL = "https://careerviet.vn/viec-lam/it-phan-mem-c1-vi.html"
 
 
-def crawl_careerviet_jobs(limit=30):
+def crawl_careerviet_jobs(limit=50):
     headers = {
         "User-Agent": "Mozilla/5.0"
     }

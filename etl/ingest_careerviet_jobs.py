@@ -5,7 +5,7 @@ from load.load_raw_jobs import load_raw_jobs
 def run_careerviet_ingestion():
     print("Starting CareerViet crawler ingestion...")
 
-    jobs = crawl_careerviet_jobs(limit=20)
+    jobs = crawl_careerviet_jobs(limit=50)
 
     print(f"Crawled {len(jobs)} jobs from CareerViet")
 
