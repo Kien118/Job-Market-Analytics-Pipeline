@@ -1,6 +1,6 @@
 import os
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 
 DATABASE_URL = os.getenv(
@@ -10,23 +10,20 @@ DATABASE_URL = os.getenv(
 
 
 def load_top_skills(df):
-
-    if df.empty:
-        print(
-            "No skill data found"
-        )
-        return
-
     engine = create_engine(
         DATABASE_URL
     )
 
-    df.to_sql(
-        "mart_top_skills",
-        engine,
-        if_exists="replace",
-        index=False
-    )
+    with engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE mart_top_skills"))
+
+        if not df.empty:
+            df.to_sql(
+                "mart_top_skills",
+                connection,
+                if_exists="append",
+                index=False
+            )
 
     print(
         f"Loaded {len(df)} skills into mart_top_skills"

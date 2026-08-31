@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 
 DATABASE_URL = os.getenv(
@@ -9,17 +9,17 @@ DATABASE_URL = os.getenv(
 
 
 def load_stg_jobs(df):
-    if df.empty:
-        print("No transformed jobs to load.")
-        return
-
     engine = create_engine(DATABASE_URL)
 
-    df.to_sql(
-        "stg_jobs",
-        engine,
-        if_exists="replace",
-        index=False
-    )
+    with engine.begin() as connection:
+        connection.execute(text("TRUNCATE TABLE stg_jobs"))
+
+        if not df.empty:
+            df.to_sql(
+                "stg_jobs",
+                connection,
+                if_exists="append",
+                index=False
+            )
 
     print(f"Loaded {len(df)} rows into stg_jobs")
