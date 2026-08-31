@@ -15,6 +15,8 @@ CREATE TABLE raw_jobs (
 
     posted_date DATE,
 
+    job_hash VARCHAR(32) NOT NULL UNIQUE,
+
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
