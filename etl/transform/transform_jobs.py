@@ -16,6 +16,9 @@ SKILLS = [
 
 
 def extract_skills(description):
+    if not isinstance(description, str):
+        return []
+
     description = description.lower()
 
     found_skills = []
@@ -47,6 +50,9 @@ def normalize_salary(salary_text):
 
 
 def detect_seniority(title):
+    if not isinstance(title, str):
+        return "Unknown"
+
     title = title.lower()
 
     if "intern" in title:
@@ -69,8 +75,8 @@ def transform_jobs(df):
         print("No raw jobs found. Skip transform.")
         return df
 
-    df["clean_title"] = df["job_title"].str.strip()
-    df["clean_location"] = df["location"].str.strip()
+    df["clean_title"] = df["job_title"].fillna("").astype(str).str.strip()
+    df["clean_location"] = df["location"].fillna("").astype(str).str.strip()
 
     salary_df = df["salary_text"].apply(
         lambda x: normalize_salary(x)
