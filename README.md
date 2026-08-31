@@ -189,13 +189,27 @@ Daily execution using APScheduler.
 git clone https://github.com/Kien118/Job-Market-Analytics-Pipeline.git
 ```
 
-### 2. Start Infrastructure
+### 2. Create Environment File
+
+Create the local `.env` file from the committed example before starting Docker Compose:
+
+```bash
+cp .env.example .env
+```
+
+On Windows PowerShell, use:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+### 3. Start Infrastructure
 
 ```bash
 docker compose up --build
 ```
 
-### 3. Run Job Crawler
+### 4. Run Job Crawler
 
 ```bash
 cd etl
@@ -203,13 +217,13 @@ cd etl
 python ingest_careerviet_jobs.py
 ```
 
-### 4. Run ETL Pipeline
+### 5. Run ETL Pipeline
 
 ```bash
 python pipeline.py
 ```
 
-### 5. Run Dashboard
+### 6. Run Dashboard
 
 ```bash
 cd dashboard
@@ -217,7 +231,7 @@ cd dashboard
 streamlit run streamlit_app.py
 ```
 
-### 6. Run Scheduler
+### 7. Run Scheduler
 
 ```bash
 python scheduler.py
