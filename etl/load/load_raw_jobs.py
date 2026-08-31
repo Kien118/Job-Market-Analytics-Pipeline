@@ -11,11 +11,11 @@ DATABASE_URL = os.getenv(
 )
 
 
-def generate_job_hash(row):
+def generate_job_hash(job_title, company_name, location):
     key = (
-        f"{row.get('job_title', '')}|"
-        f"{row.get('company_name', '')}|"
-        f"{row.get('location', '')}"
+        f"{job_title or ''}|"
+        f"{company_name or ''}|"
+        f"{location or ''}"
     )
 
     return hashlib.md5(
@@ -33,7 +33,11 @@ def load_raw_jobs(jobs):
     df = pd.DataFrame(jobs)
 
     df["job_hash"] = df.apply(
-        generate_job_hash,
+        lambda row: generate_job_hash(
+            row.get("job_title"),
+            row.get("company_name"),
+            row.get("location")
+        ),
         axis=1
     )
 
