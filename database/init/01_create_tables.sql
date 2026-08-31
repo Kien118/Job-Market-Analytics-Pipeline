@@ -83,40 +83,15 @@ CREATE TABLE mart_top_skills (
 
 CREATE TABLE mart_salary_summary (
 
-    location_name TEXT,
+    clean_location TEXT,
 
     avg_salary NUMERIC
 );
 
 CREATE TABLE mart_daily_job_stats (
 
-    stat_date DATE,
-
-    total_jobs INT
-);
-
-
-CREATE TABLE IF NOT EXISTS mart_top_skills (
-
-    skill_name TEXT,
-
-    total_jobs INT
-
-);
-
-CREATE TABLE IF NOT EXISTS mart_salary_summary (
-
-    clean_location TEXT,
-
-    avg_salary NUMERIC
-
-);
-
-CREATE TABLE IF NOT EXISTS mart_daily_job_stats (
-
     posted_date DATE,
 
     total_jobs INT
-
 );
 
