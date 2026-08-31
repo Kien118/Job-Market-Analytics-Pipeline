@@ -31,20 +31,29 @@ def extract_skills(description):
 
 
 def normalize_salary(salary_text):
-    if salary_text is None:
+    if not isinstance(salary_text, str):
         return None, None
 
-    numbers = re.findall(r"\d+", salary_text)
+    normalized_text = re.sub(
+        r"(?<=\d)[,.](?=\d{3}(?:[,.]\d{3})*(?!\d))",
+        "",
+        salary_text
+    )
+
+    numbers = [
+        float(value.replace(",", "."))
+        for value in re.findall(r"\d+(?:[.,]\d+)?", normalized_text)
+    ]
 
     if len(numbers) == 0:
         return None, None
 
     if len(numbers) == 1:
-        value = float(numbers[0])
+        value = numbers[0]
         return value, value
 
-    min_salary = float(numbers[0])
-    max_salary = float(numbers[1])
+    min_salary = numbers[0]
+    max_salary = numbers[1]
 
     return min_salary, max_salary
 
