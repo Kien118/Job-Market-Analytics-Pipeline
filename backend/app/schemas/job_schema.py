@@ -18,3 +18,7 @@ class JobCreate(BaseModel):
     description: str
 
     posted_date: date
+
+    source_url: str | None = None
+
+    external_id: str | None = None

@@ -33,6 +33,10 @@ class RawJob(Base):
 
     posted_date = Column(Date)
 
+    source_url = Column(Text)
+
+    external_id = Column(Text)
+
     job_hash = Column(String(32), nullable=False, unique=True)
 
     ingested_at = Column(TIMESTAMP)

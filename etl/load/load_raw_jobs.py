@@ -1,4 +1,5 @@
 import hashlib
+import math
 import os
 
 import pandas as pd
@@ -11,15 +12,46 @@ DATABASE_URL = os.getenv(
 )
 
 
-def generate_job_hash(job_title, company_name, location):
-    key = (
-        f"{job_title or ''}|"
-        f"{company_name or ''}|"
-        f"{location or ''}"
-    )
+def normalize_hash_value(value):
+    if value is None:
+        return ""
+
+    try:
+        if math.isnan(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+
+    return str(value).strip().lower()
+
+
+def generate_job_hash(
+    source,
+    job_title,
+    company_name,
+    location,
+    source_url=None,
+    external_id=None
+):
+    normalized_source_url = normalize_hash_value(source_url).rstrip("/")
+    normalized_external_id = normalize_hash_value(external_id)
+
+    if normalized_source_url:
+        key = f"url|{normalized_source_url}"
+    elif normalized_external_id:
+        key = (
+            f"external|{normalize_hash_value(source)}|"
+            f"{normalized_external_id}"
+        )
+    else:
+        key = (
+            f"content|{normalize_hash_value(job_title)}|"
+            f"{normalize_hash_value(company_name)}|"
+            f"{normalize_hash_value(location)}"
+        )
 
     return hashlib.md5(
-        key.lower().strip().encode("utf-8")
+        key.encode("utf-8")
     ).hexdigest()
 
 
@@ -32,11 +64,20 @@ def load_raw_jobs(jobs):
 
     df = pd.DataFrame(jobs)
 
+    for column in ("source_url", "external_id"):
+        if column not in df.columns:
+            df[column] = None
+
+    df = df.astype(object).where(pd.notna(df), None)
+
     df["job_hash"] = df.apply(
         lambda row: generate_job_hash(
+            row.get("source"),
             row.get("job_title"),
             row.get("company_name"),
-            row.get("location")
+            row.get("location"),
+            row.get("source_url"),
+            row.get("external_id")
         ),
         axis=1
     )
@@ -53,6 +94,8 @@ def load_raw_jobs(jobs):
             salary_text,
             description,
             posted_date,
+            source_url,
+            external_id,
             job_hash
         )
         VALUES (
@@ -63,6 +106,8 @@ def load_raw_jobs(jobs):
             :salary_text,
             :description,
             :posted_date,
+            :source_url,
+            :external_id,
             :job_hash
         )
         ON CONFLICT (job_hash) DO NOTHING;

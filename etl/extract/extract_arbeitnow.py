@@ -31,7 +31,9 @@ def extract_arbeitnow_jobs(limit=20):
                     "description": job.get("description", ""),
                     "posted_date": datetime.fromtimestamp(
                         job.get("created_at")
-                    ).date()
+                    ).date(),
+                    "source_url": job.get("url"),
+                    "external_id": job.get("slug")
                 }
             )
         except (AttributeError, TypeError, ValueError, OSError) as error:

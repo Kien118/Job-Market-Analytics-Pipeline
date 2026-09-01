@@ -15,6 +15,10 @@ CREATE TABLE raw_jobs (
 
     posted_date DATE,
 
+    source_url TEXT,
+
+    external_id TEXT,
+
     job_hash VARCHAR(32) NOT NULL UNIQUE,
 
     ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

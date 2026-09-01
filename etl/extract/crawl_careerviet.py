@@ -92,7 +92,9 @@ def crawl_careerviet_job_detail(job_url, fallback_title, headers):
             "location": location,
             "salary_text": salary,
             "description": page_text[:5000],
-            "posted_date": date.today()
+            "posted_date": date.today(),
+            "source_url": job_url,
+            "external_id": None
         }
 
     except Exception as e:
