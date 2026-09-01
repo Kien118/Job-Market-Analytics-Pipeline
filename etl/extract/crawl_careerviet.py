@@ -86,6 +86,7 @@ def crawl_careerviet_job_detail(job_url, fallback_title, headers):
         location = extract_location(page_text)
         salary = extract_salary(page_text)
         posted_date = extract_posted_date(soup)
+        description = extract_job_description(soup)
 
         return {
             "source": "CareerViet Crawler",
@@ -93,7 +94,7 @@ def crawl_careerviet_job_detail(job_url, fallback_title, headers):
             "company_name": company,
             "location": location,
             "salary_text": salary,
-            "description": page_text[:5000],
+            "description": description,
             "posted_date": posted_date,
             "source_url": job_url,
             "external_id": None
@@ -190,6 +191,33 @@ def extract_posted_date(soup):
                 continue
 
     return None
+
+
+def extract_job_description(soup):
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw_json = script.string or script.get_text(" ", strip=True)
+
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+
+        for job_posting in find_job_postings(payload):
+            raw_description = job_posting.get("description")
+
+            if isinstance(raw_description, str) and raw_description.strip():
+                return BeautifulSoup(
+                    raw_description,
+                    "html.parser"
+                ).get_text(" ", strip=True)
+
+    fallback_sections = soup.select(".detail-row.reset-bullet")
+    fallback_description = " ".join(
+        section.get_text(" ", strip=True)
+        for section in fallback_sections
+    )
+
+    return fallback_description
 
 
 def find_job_postings(payload):

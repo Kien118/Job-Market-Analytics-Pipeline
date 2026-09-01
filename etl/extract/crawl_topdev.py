@@ -157,13 +157,17 @@ def crawl_topdev_job_detail(job_url, fallback_title, headers):
             soup
         )
 
+        description = extract_job_description(
+            soup
+        )
+
         return {
             "source": "TopDev Crawler",
             "job_title": title,
             "company_name": company,
             "location": location,
             "salary_text": salary,
-            "description": page_text[:5000],
+            "description": description,
             "posted_date": posted_date,
             "source_url": job_url,
             "external_id": None
@@ -269,6 +273,27 @@ def extract_posted_date(soup):
                 continue
 
     return None
+
+
+def extract_job_description(soup):
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw_json = script.string or script.get_text(" ", strip=True)
+
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+
+        for job_posting in find_job_postings(payload):
+            raw_description = job_posting.get("description")
+
+            if isinstance(raw_description, str) and raw_description.strip():
+                return BeautifulSoup(
+                    raw_description,
+                    "html.parser"
+                ).get_text(" ", strip=True)
+
+    return ""
 
 
 def find_job_postings(payload):
