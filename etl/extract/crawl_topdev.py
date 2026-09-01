@@ -1,5 +1,6 @@
+import json
 import time
-from datetime import date
+from datetime import datetime
 from urllib.parse import urljoin
 
 import requests
@@ -152,6 +153,10 @@ def crawl_topdev_job_detail(job_url, fallback_title, headers):
             page_text
         )
 
+        posted_date = extract_posted_date(
+            soup
+        )
+
         return {
             "source": "TopDev Crawler",
             "job_title": title,
@@ -159,7 +164,7 @@ def crawl_topdev_job_detail(job_url, fallback_title, headers):
             "location": location,
             "salary_text": salary,
             "description": page_text[:5000],
-            "posted_date": date.today(),
+            "posted_date": posted_date,
             "source_url": job_url,
             "external_id": None
         }
@@ -239,3 +244,45 @@ def extract_salary(text):
         return "Competitive"
 
     return "Not specified"
+
+
+def extract_posted_date(soup):
+    for script in soup.find_all("script", type="application/ld+json"):
+        raw_json = script.string or script.get_text(" ", strip=True)
+
+        try:
+            payload = json.loads(raw_json)
+        except json.JSONDecodeError:
+            continue
+
+        for job_posting in find_job_postings(payload):
+            raw_date = job_posting.get("datePosted")
+
+            if not isinstance(raw_date, str):
+                continue
+
+            try:
+                return datetime.fromisoformat(
+                    raw_date.replace("Z", "+00:00")
+                ).date()
+            except ValueError:
+                continue
+
+    return None
+
+
+def find_job_postings(payload):
+    if isinstance(payload, dict):
+        job_type = payload.get("@type")
+
+        if job_type == "JobPosting" or (
+            isinstance(job_type, list) and "JobPosting" in job_type
+        ):
+            yield payload
+
+        for value in payload.values():
+            yield from find_job_postings(value)
+
+    elif isinstance(payload, list):
+        for value in payload:
+            yield from find_job_postings(value)
