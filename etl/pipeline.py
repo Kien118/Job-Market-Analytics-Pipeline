@@ -1,102 +1,71 @@
 import logging
+import os
 
-from extract.extract_raw_jobs import extract_raw_jobs
-from transform.transform_jobs import transform_jobs
-from load.load_stg_jobs import load_stg_jobs
-
-from analytics.build_top_skills import build_top_skills
-from load.load_top_skills import load_top_skills
-
-from analytics.build_salary_summary import (
-    build_salary_summary
-)
-
-from load.load_salary_summary import (
-    load_salary_summary
-)
+from sqlalchemy import create_engine, text
 
 from analytics.build_daily_job_stats import build_daily_job_stats
-from load.load_daily_job_stats import load_daily_job_stats
+from analytics.build_salary_summary import build_salary_summary
+from analytics.build_top_skills import build_top_skills
+from extract.extract_raw_jobs import extract_raw_jobs
+from quality.quality_checks import log_coverage, validate_analytics
+from transform.transform_jobs import transform_jobs
 
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s - %(message)s"
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
 )
-
 logger = logging.getLogger(__name__)
 
 
 def run_pipeline():
-    logger.info("Starting ETL pipeline")
-
+    engine = create_engine(
+        os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/job_market_db"),
+        isolation_level="READ COMMITTED",
+        hide_parameters=True,
+    )
+    step = "read source data"
     try:
-        raw_df = extract_raw_jobs()
-        logger.info("Extracted %s raw jobs", len(raw_df))
-    except Exception:
-        logger.exception("ETL step failed: extract raw jobs")
-        raise
+        with engine.begin() as connection:
+            # Serialize refreshes before reading so an older snapshot cannot overwrite a newer one.
+            connection.execute(text("SELECT pg_advisory_xact_lock(hashtext('job_market.publish_analytics'))"))
+            raw = extract_raw_jobs(connection)
+            logger.info("Extracted %d raw jobs", len(raw))
+            if raw.empty and connection.scalar(text("""
+                SELECT EXISTS (
+                    SELECT 1 FROM stg_jobs UNION ALL
+                    SELECT 1 FROM mart_top_skills UNION ALL
+                    SELECT 1 FROM mart_salary_summary UNION ALL
+                    SELECT 1 FROM mart_daily_job_stats
+                )
+            """)):
+                raise ValueError("Raw data is empty while published tables contain data")
 
-    try:
-        transformed_df = transform_jobs(raw_df)
-        logger.info("Transformed %s jobs", len(transformed_df))
-    except Exception:
-        logger.exception("ETL step failed: transform jobs")
-        raise
+            step = "transform and validate"
+            staging = transform_jobs(raw)
+            top_skills = build_top_skills(staging)
+            salary_summary = build_salary_summary(staging)
+            daily_stats = build_daily_job_stats(staging)
+            validate_analytics(raw, staging, daily_stats, top_skills, salary_summary)
+            log_coverage(staging)
 
-    try:
-        load_stg_jobs(transformed_df)
-        logger.info("ETL step completed: load staging jobs")
+            step = "publish staging and marts"
+            tables = {
+                "stg_jobs": staging,
+                "mart_top_skills": top_skills,
+                "mart_salary_summary": salary_summary,
+                "mart_daily_job_stats": daily_stats,
+            }
+            for name, rows in tables.items():
+                connection.execute(text(f"DELETE FROM {name}"))
+                if not rows.empty:
+                    rows.to_sql(name, connection, if_exists="append", index=False, chunksize=1000)
+        logger.info("Published row counts: %s", {name: len(rows) for name, rows in tables.items()})
     except Exception:
-        logger.exception("ETL step failed: load staging jobs")
+        logger.exception("ETL failed during %s", step)
         raise
-
-    # Analytics Mart
-    try:
-        top_skills_df = build_top_skills(
-            transformed_df
-        )
-        logger.info("ETL step completed: build top skills")
-    except Exception:
-        logger.exception("ETL step failed: build top skills")
-        raise
-
-    try:
-        load_top_skills(top_skills_df)
-        logger.info("ETL step completed: load top skills")
-    except Exception:
-        logger.exception("ETL step failed: load top skills")
-        raise
-
-    try:
-        salary_summary_df = build_salary_summary(transformed_df)
-        logger.info("ETL step completed: build salary summary")
-    except Exception:
-        logger.exception("ETL step failed: build salary summary")
-        raise
-
-    try:
-        load_salary_summary(salary_summary_df)
-        logger.info("ETL step completed: load salary summary")
-    except Exception:
-        logger.exception("ETL step failed: load salary summary")
-        raise
-
-    try:
-        daily_job_stats_df = build_daily_job_stats(raw_df)
-        logger.info("ETL step completed: build daily job stats")
-    except Exception:
-        logger.exception("ETL step failed: build daily job stats")
-        raise
-
-    try:
-        load_daily_job_stats(daily_job_stats_df)
-        logger.info("ETL step completed: load daily job stats")
-    except Exception:
-        logger.exception("ETL step failed: load daily job stats")
-        raise
-
-    logger.info("ETL pipeline completed successfully")
+    finally:
+        engine.dispose()
 
 
 if __name__ == "__main__":
