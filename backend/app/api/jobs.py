@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.core.config import settings
 
-from app.schemas.job_schema import JobCreate
+from app.schemas.job_schema import JobCreate, JobListResponse
 
 from app.services.job_service import (
     create_job,
@@ -37,11 +37,12 @@ def ingest_job(
     return create_job(db, job)
 
 
-@router.get("/")
+@router.get("/", response_model=JobListResponse)
 def list_jobs(
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int | None = Query(default=None, ge=0),
     db: Session = Depends(get_db)
 ):
 
-    return get_jobs(db, limit, offset)
+    return get_jobs(db, offset if offset is not None else skip, limit)

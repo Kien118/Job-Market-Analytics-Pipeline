@@ -1,7 +1,7 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Annotated
 
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 
 class JobCreate(BaseModel):
@@ -23,3 +23,26 @@ class JobCreate(BaseModel):
     source_url: str | None = None
 
     external_id: str | None = None
+
+
+class JobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    job_id: int
+    source: str | None = None
+    job_title: str | None = None
+    company_name: str | None = None
+    location: str | None = None
+    salary_text: str | None = None
+    description: str | None = None
+    posted_date: date | None = None
+    source_url: str | None = None
+    external_id: str | None = None
+    ingested_at: datetime | None = None
+
+
+class JobListResponse(BaseModel):
+    items: list[JobResponse]
+    total: int
+    skip: int
+    limit: int

@@ -51,7 +51,7 @@ If a run fails, check the source and error in the ETL logs. Confirm whether the 
 | Salary | Average midpoint of comparable VND/month ranges or exact amounts, with sample size. The database mart keeps currency and pay period separate. |
 | Publication | Staging and marts are validated and replaced in one PostgreSQL transaction. The dashboard reads one staged snapshot and applies the same source, location and date filters. |
 
-Streamlit connects as `job_market_dashboard` and can only read the published staging relation. Raw descriptions and contact text stay out of the published dashboard data. The FastAPI routes under `/jobs` are disabled until `JOB_API_KEY` is set in `.env`. Send that value in the `X-API-Key` header. `GET /jobs/?limit=100&offset=0` paginates the authenticated raw records. `GET /health` checks the PostgreSQL connection. Compose binds service ports to localhost.
+Streamlit connects as `job_market_dashboard` and can only read the published staging relation. Raw descriptions and contact text stay out of the published dashboard data. The FastAPI routes under `/jobs` are disabled until `JOB_API_KEY` is set in `.env`. Send that value in the `X-API-Key` header. `GET /jobs/?skip=0&limit=50` returns `items`, `total`, `skip`, and `limit`. The page size is capped at 100. An explicit `offset` takes precedence over `skip`. `GET /health` checks the PostgreSQL connection. Compose binds service ports to localhost.
 
 ## Upgrade an existing PostgreSQL volume
 
