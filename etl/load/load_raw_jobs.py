@@ -1,8 +1,6 @@
-import hashlib
-import math
 import os
+from datetime import date, datetime
 
-import pandas as pd
 from sqlalchemy import create_engine, text
 
 
@@ -11,119 +9,51 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:postgres@localhost:5432/job_market_db"
 )
 
+JOB_FIELDS = (
+    "source", "job_title", "company_name", "location", "salary_text",
+    "description", "posted_date", "source_url", "external_id",
+)
 
-def normalize_hash_value(value):
-    if value is None:
-        return ""
-
-    try:
-        if math.isnan(value):
-            return ""
-    except (TypeError, ValueError):
-        pass
-
-    return str(value).strip().lower()
+UPSERT_JOB = text("""
+    SELECT job_id, changed FROM public.upsert_raw_job(
+        :source, :job_title, :company_name, :location, :salary_text,
+        :description, :posted_date, :source_url, :external_id
+    )
+""")
 
 
-def generate_job_hash(
-    source,
-    job_title,
-    company_name,
-    location,
-    source_url=None,
-    external_id=None
-):
-    normalized_source_url = normalize_hash_value(source_url).rstrip("/")
-    normalized_external_id = normalize_hash_value(external_id)
+def validated_job(job):
+    if not isinstance(job, dict):
+        raise ValueError("job must be an object")
+    row = {field: job.get(field) for field in JOB_FIELDS}
+    for field, value in row.items():
+        if value is None:
+            continue
+        if field == "posted_date":
+            if not isinstance(value, date) or isinstance(value, datetime):
+                raise ValueError("posted_date must be a date")
+        elif not isinstance(value, str) or "\0" in value:
+            raise ValueError(f"{field} must be text without null bytes")
 
-    if normalized_source_url:
-        key = f"url|{normalized_source_url}"
-    elif normalized_external_id:
-        key = (
-            f"external|{normalize_hash_value(source)}|"
-            f"{normalized_external_id}"
-        )
-    else:
-        key = (
-            f"content|{normalize_hash_value(job_title)}|"
-            f"{normalize_hash_value(company_name)}|"
-            f"{normalize_hash_value(location)}"
-        )
-
-    return hashlib.md5(
-        key.encode("utf-8")
-    ).hexdigest()
+    if not row["source"] or not row["source"].strip() or len(row["source"].strip()) > 100:
+        raise ValueError("source must have between 1 and 100 characters")
+    if not row["job_title"] or not row["job_title"].strip():
+        raise ValueError("job_title is required")
+    return row
 
 
 def load_raw_jobs(jobs):
-    if not jobs:
-        print("No jobs extracted")
-        return
+    rows = [validated_job(job) for job in jobs]
+    if not rows:
+        return {"written": 0, "unchanged": 0}
 
     engine = create_engine(DATABASE_URL)
-
-    df = pd.DataFrame(jobs)
-
-    for column in ("source_url", "external_id"):
-        if column not in df.columns:
-            df[column] = None
-
-    df = df.astype(object).where(pd.notna(df), None)
-
-    df["job_hash"] = df.apply(
-        lambda row: generate_job_hash(
-            row.get("source"),
-            row.get("job_title"),
-            row.get("company_name"),
-            row.get("location"),
-            row.get("source_url"),
-            row.get("external_id")
-        ),
-        axis=1
-    )
-
-    inserted_count = 0
-    skipped_count = 0
-
-    insert_sql = text("""
-        INSERT INTO raw_jobs (
-            source,
-            job_title,
-            company_name,
-            location,
-            salary_text,
-            description,
-            posted_date,
-            source_url,
-            external_id,
-            job_hash
-        )
-        VALUES (
-            :source,
-            :job_title,
-            :company_name,
-            :location,
-            :salary_text,
-            :description,
-            :posted_date,
-            :source_url,
-            :external_id,
-            :job_hash
-        )
-        ON CONFLICT (job_hash) DO NOTHING;
-    """)
-
-    with engine.begin() as conn:
-        for job in df.to_dict(orient="records"):
-            result = conn.execute(
-                insert_sql,
-                job
+    try:
+        with engine.begin() as connection:
+            written = sum(
+                connection.execute(UPSERT_JOB, row).one().changed for row in rows
             )
+    finally:
+        engine.dispose()
 
-            if result.rowcount == 1:
-                inserted_count += 1
-            else:
-                skipped_count += 1
-
-    print(f"Inserted {inserted_count} new jobs into raw_jobs")
-    print(f"Skipped {skipped_count} duplicate jobs")
+    return {"written": written, "unchanged": len(rows) - written}

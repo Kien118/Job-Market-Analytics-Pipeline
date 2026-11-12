@@ -1,18 +1,13 @@
+import logging
+
 from extract.extract_arbeitnow import extract_arbeitnow_jobs
-from load.load_raw_jobs import load_raw_jobs
+from extract.source_batch import ingest_batch
 
 
 def run_api_ingestion():
-    print("Starting API job ingestion...")
-
-    jobs = extract_arbeitnow_jobs(limit=20)
-
-    print(f"Extracted {len(jobs)} jobs from Arbeitnow API")
-
-    load_raw_jobs(jobs)
-
-    print("API job ingestion completed successfully")
+    return ingest_batch("Arbeitnow", extract_arbeitnow_jobs(limit=20))
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     run_api_ingestion()

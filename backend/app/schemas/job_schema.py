@@ -1,13 +1,14 @@
 from datetime import date
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, StringConstraints
 
 
 class JobCreate(BaseModel):
 
-    source: str
+    source: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 
-    job_title: str
+    job_title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 
     company_name: str
 

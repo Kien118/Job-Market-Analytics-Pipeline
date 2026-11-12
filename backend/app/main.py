@@ -1,6 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.api.jobs import router as jobs_router
-from app.api.test_db import router as test_router
+from app.db.connection import engine
 
 
 app = FastAPI(
@@ -9,7 +12,6 @@ app = FastAPI(
 )
 
 
-app.include_router(test_router)
 app.include_router(jobs_router)
 
 @app.get("/")
@@ -21,6 +23,11 @@ def root():
 
 @app.get("/health")
 def health():
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="Database unavailable") from None
     return {
         "status": "healthy"
     }
