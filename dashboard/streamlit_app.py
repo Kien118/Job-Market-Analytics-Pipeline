@@ -3,19 +3,48 @@ import os
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from sqlalchemy import create_engine
+from sqlalchemy import URL, create_engine
+from sqlalchemy.exc import SQLAlchemyError
 
-
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/job_market_db"
+from metrics import (
+    daily_postings,
+    filter_postings,
+    monthly_vnd_salaries,
+    search_postings,
+    skill_counts,
 )
 
 
 @st.cache_data(ttl=30)
-def load_table(table_name: str):
-    engine = create_engine(DATABASE_URL)
-    return pd.read_sql(f"SELECT * FROM {table_name};", engine)
+def load_postings(database_url):
+    engine = create_engine(database_url)
+    try:
+        return pd.read_sql(
+            """
+            SELECT job_id, source, clean_title, COALESCE(clean_location, 'Unknown') AS clean_location,
+                   seniority, posted_date, skills, has_description, min_salary, max_salary,
+                   salary_currency, salary_period
+            FROM stg_jobs
+            WHERE source IS NOT NULL
+            """,
+            engine,
+        )
+    finally:
+        engine.dispose()
+
+
+def database_url():
+    explicit_url = os.getenv("DATABASE_URL")
+    if explicit_url:
+        return explicit_url
+    return URL.create(
+        "postgresql",
+        username=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        host=os.environ["POSTGRES_HOST"],
+        port=int(os.getenv("POSTGRES_PORT", "5432")),
+        database=os.environ["POSTGRES_DB"],
+    ).render_as_string(hide_password=False)
 
 
 def style_plotly(fig):
@@ -91,48 +120,63 @@ st.markdown(
 
 st.title("📊 Job Market Analytics Dashboard")
 st.caption(
-    "End-to-end Data Engineering pipeline: "
-    "Crawler/API → PostgreSQL → ETL → Analytics Marts → Streamlit"
+    "Each posting is counted once per source. The same vacancy can appear on multiple sites."
 )
 
 if st.button("🔄 Refresh data"):
-    st.cache_data.clear()
-    st.rerun()
+    load_postings.clear()
 
-top_skills_df = load_table("mart_top_skills")
-salary_df = load_table("mart_salary_summary")
-daily_stats_df = load_table("mart_daily_job_stats")
-stg_jobs_df = load_table("stg_jobs")
-raw_jobs_df = load_table("raw_jobs")
+try:
+    postings = load_postings(database_url())
+except (KeyError, ValueError, SQLAlchemyError):
+    st.error("Could not read published postings. Check the dashboard database connection and schema.")
+    st.stop()
+
+if postings.empty:
+    st.info("No job postings have been published yet.")
+    st.stop()
 
 # Sidebar filters
 st.sidebar.header("🔎 Filters")
 
-sources = sorted(raw_jobs_df["source"].dropna().unique().tolist())
+sources = sorted(postings["source"].dropna().unique().tolist())
 selected_sources = st.sidebar.multiselect(
     "Source",
     sources,
     default=sources
 )
 
-locations = sorted(stg_jobs_df["clean_location"].dropna().unique().tolist())
+locations = sorted(postings["clean_location"].unique().tolist())
 selected_locations = st.sidebar.multiselect(
     "Location",
     locations,
     default=locations
 )
 
-filtered_raw_df = raw_jobs_df[
-    raw_jobs_df["source"].isin(selected_sources)
-]
+posted_range = ()
+known_dates = postings["posted_date"].dropna()
+if not known_dates.empty and st.sidebar.checkbox("Filter by posting date"):
+    earliest = known_dates.min()
+    latest = known_dates.max()
+    posted_range = st.sidebar.date_input(
+        "Posting dates",
+        value=(earliest, latest),
+        min_value=earliest,
+        max_value=latest,
+    )
+    if len(posted_range) != 2:
+        st.sidebar.caption("Select a start and end date to apply the date filter.")
+    else:
+        st.sidebar.caption("The date filter excludes postings with an unknown date.")
 
-filtered_jobs_df = stg_jobs_df[
-    stg_jobs_df["clean_location"].isin(selected_locations)
-]
+filtered_jobs_df = filter_postings(postings, selected_sources, selected_locations, posted_range)
+top_skills_df, described_count = skill_counts(filtered_jobs_df)
+salary_df = monthly_vnd_salaries(filtered_jobs_df)
+daily_stats_df = daily_postings(filtered_jobs_df)
 
 # KPI
 total_jobs = len(filtered_jobs_df)
-total_sources = filtered_raw_df["source"].nunique()
+total_sources = filtered_jobs_df["source"].nunique()
 total_skills = len(top_skills_df)
 total_locations = filtered_jobs_df["clean_location"].nunique()
 
@@ -144,10 +188,10 @@ top_skill = (
 
 col1, col2, col3, col4, col5 = st.columns(5)
 
-col1.metric("Total Jobs", total_jobs)
+col1.metric("Postings", total_jobs)
 col2.metric("Sources", total_sources)
-col3.metric("Skills", total_skills)
-col4.metric("Locations", total_locations)
+col3.metric("Skills mentioned", total_skills)
+col4.metric("Location groups", total_locations)
 col5.metric("Top Skill", top_skill)
 
 st.divider()
@@ -156,10 +200,10 @@ st.divider()
 left, right = st.columns([1, 2])
 
 with left:
-    st.subheader("📌 Jobs by Source")
+    st.subheader("📌 Postings by Source")
 
     source_df = (
-        filtered_raw_df
+        filtered_jobs_df
         .groupby("source")
         .size()
         .reset_index(name="total_jobs")
@@ -189,18 +233,25 @@ with left:
         st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    st.subheader("🔥 Top Skills")
+    st.subheader("🔥 Skills Mentioned in Postings")
+    st.caption(
+        f"{described_count:,} of {total_jobs:,} postings have descriptions. "
+        "Skill share uses postings with descriptions as the denominator. "
+        "One posting can mention multiple skills."
+    )
 
     if top_skills_df.empty:
-        st.info("No skill data available.")
+        st.info("No tracked skills were found in the selected postings.")
     else:
         fig = px.bar(
-            top_skills_df.sort_values("total_jobs", ascending=True),
+            top_skills_df.iloc[::-1],
             x="total_jobs",
             y="skill_name",
             orientation="h",
             text="total_jobs",
             color="total_jobs",
+            hover_data={"share": ":.1%"},
+            labels={"share": "Share of postings with descriptions", "total_jobs": "Postings"},
             color_continuous_scale="Blues"
         )
         fig.update_traces(
@@ -208,7 +259,7 @@ with right:
             marker_line_width=0
         )
         fig.update_layout(
-            xaxis_title="Total Jobs",
+            xaxis_title="Postings mentioning skill",
             yaxis_title="Skill",
             showlegend=False,
             coloraxis_showscale=False
@@ -222,7 +273,7 @@ st.divider()
 left, right = st.columns(2)
 
 with left:
-    st.subheader("📍 Jobs by Location")
+    st.subheader("📍 Postings by Location")
 
     location_df = (
         filtered_jobs_df
@@ -245,7 +296,7 @@ with left:
         )
         fig.update_layout(
             xaxis_title="Location",
-            yaxis_title="Total Jobs",
+            yaxis_title="Postings",
             showlegend=False,
             coloraxis_showscale=False
         )
@@ -254,28 +305,24 @@ with left:
         st.plotly_chart(fig, use_container_width=True)
 
 with right:
-    st.subheader("📈 Hiring Trend")
+    st.subheader("📈 Postings by Date")
+    unknown_dates = filtered_jobs_df["posted_date"].isna().sum()
+    st.caption(f"{unknown_dates:,} selected postings have an unknown posting date.")
 
     if daily_stats_df.empty:
-        st.info("No daily job trend data available.")
+        st.info("No known posting dates in the selection.")
     else:
-        daily_stats_df["posted_date"] = pd.to_datetime(
-            daily_stats_df["posted_date"]
-        ).dt.date
-
-        fig = px.line(
+        fig = px.scatter(
             daily_stats_df,
             x="posted_date",
             y="total_jobs",
-            markers=True,
         )
         fig.update_traces(
-            line=dict(width=4, color="#60A5FA"),
             marker=dict(size=10, color="#FBBF24")
         )
         fig.update_layout(
             xaxis_title="Posted Date",
-            yaxis_title="Total Jobs"
+            yaxis_title="Postings"
         )
         fig = style_plotly(fig)
         st.plotly_chart(fig, use_container_width=True)
@@ -283,13 +330,14 @@ with right:
 st.divider()
 
 # Salary
-st.subheader("💰 Salary Analytics")
+st.subheader("💰 Advertised Salary by Location")
+st.caption(
+    f"{salary_df['total_jobs'].sum():,} of {total_jobs:,} postings have usable VND/month figures. "
+    "Each posting contributes the midpoint of its advertised range."
+)
 
 if salary_df.empty:
-    st.info(
-        "No salary data available. "
-        "Some Vietnamese job boards hide exact salary or show it as negotiable."
-    )
+    st.info("No comparable monthly VND salaries in the selection.")
 else:
     fig = px.bar(
         salary_df,
@@ -297,36 +345,40 @@ else:
         y="avg_salary",
         text="avg_salary",
         color="avg_salary",
+        hover_data={"total_jobs": True},
+        labels={"avg_salary": "Average midpoint", "total_jobs": "Postings with salary"},
         color_continuous_scale="Viridis"
     )
     fig.update_layout(
         xaxis_title="Location",
-        yaxis_title="Average Salary",
+        yaxis_title="Average salary midpoint (VND/month)",
         coloraxis_showscale=False
     )
+    fig.update_traces(texttemplate="%{y:,.0f}")
     fig = style_plotly(fig)
     st.plotly_chart(fig, use_container_width=True)
 
 st.divider()
 
 # Table
-st.subheader("🧾 Cleaned Job Data")
+st.subheader("🧾 Selected Job Postings")
 
-search_keyword = st.text_input("Search job title or skills")
+search_keyword = st.text_input("Search the table by job title or skill")
 
-table_df = filtered_jobs_df.copy()
-
-if search_keyword:
-    keyword = search_keyword.lower()
-
-    table_df = table_df[
-        table_df["clean_title"].str.lower().str.contains(keyword, na=False)
-        |
-        table_df["skills"].astype(str).str.lower().str.contains(keyword, na=False)
-    ]
+table_df = search_postings(filtered_jobs_df, search_keyword).sort_values(
+    ["posted_date", "job_id"], ascending=[False, True]
+)
 
 st.dataframe(
-    table_df,
+    table_df[["source", "clean_title", "clean_location", "posted_date", "seniority", "skills"]],
     use_container_width=True,
-    hide_index=True
+    hide_index=True,
+    column_config={
+        "source": "Source",
+        "clean_title": "Job title",
+        "clean_location": "Location",
+        "posted_date": "Posting date",
+        "seniority": "Seniority",
+        "skills": "Skills",
+    },
 )
