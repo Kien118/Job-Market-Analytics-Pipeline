@@ -1,0 +1,10 @@
+**
+!etl/
+!etl/**/
+!etl/**/*.py
+!etl/requirement.txt
+!orchestration/
+!orchestration/dags/
+!orchestration/dags/*.py
+!orchestration/tests/
+!orchestration/tests/*.py

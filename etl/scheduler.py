@@ -1,25 +1,17 @@
 import argparse
-import json
 import logging
 import os
 from datetime import datetime, timezone
 from uuid import uuid4
 
 from apscheduler.schedulers.blocking import BlockingScheduler
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 
-from ingest_api_jobs import run_api_ingestion
-from ingest_careerviet_jobs import run_careerviet_ingestion
-from ingest_topdev_jobs import run_topdev_ingestion
 from pipeline import run_pipeline
+from source_runs import INGESTIONS, record_source_run
 
 
 logger = logging.getLogger(__name__)
-INGESTIONS = {
-    "careerviet": run_careerviet_ingestion,
-    "topdev": run_topdev_ingestion,
-    "arbeitnow": run_api_ingestion,
-}
 
 
 def selected_sources():
@@ -28,23 +20,6 @@ def selected_sources():
     if not sources or any(source not in INGESTIONS for source in sources):
         raise ValueError("INGEST_SOURCES must list one or more of: " + ", ".join(INGESTIONS))
     return sources
-
-
-def record_source_run(engine, run_id, source, started_at, succeeded, result):
-    with engine.begin() as connection:
-        connection.execute(
-            text("""
-                INSERT INTO ingestion_runs (run_id, source, started_at, completed_at, succeeded, result)
-                VALUES (:run_id, :source, :started_at, CURRENT_TIMESTAMP, :succeeded, CAST(:result AS JSONB))
-            """),
-            {
-                "run_id": run_id,
-                "source": source,
-                "started_at": started_at,
-                "succeeded": succeeded,
-                "result": json.dumps(result),
-            },
-        )
 
 
 def run_job(sources):
