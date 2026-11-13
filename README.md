@@ -6,7 +6,7 @@ This project collects job postings from CareerViet, TopDev, and Arbeitnow, valid
 flowchart LR
     C[Source crawlers and API client] --> R[PostgreSQL raw jobs]
     A[Key-protected FastAPI] --> R
-    S[APScheduler] --> C
+    S[Airflow] --> C
     R --> E[Python and Pandas validation and refresh]
     E --> P[Published staging and marts]
     P --> D[Read-only Streamlit dashboard]
@@ -29,17 +29,21 @@ docker compose run --rm --build etl python pipeline.py
 
 Open the [local dashboard](http://localhost:8501). With the sample only, **Demo Board A → Hồ Chí Minh** should show two postings, both mentioning SQL. The salary chart should show an average range midpoint of VND 27.5M/month from two postings. The sample can be replayed using the same keys.
 
-## Use live sources
+## Orchestrate live sources with Airflow
+
+Airflow runs three independent ingestion tasks, one per source. Each task has a retry and a timeout. When all three succeed, `publish_analytics` runs the validated PostgreSQL refresh. Airflow records task state and logs, while `ingestion_runs` stores attempt counts and the Airflow run ID alongside each source result.
+
+Follow the [Airflow runbook](orchestration/README.md) to start the local stack, trigger a run, or replay the failure and recovery demo. The live DAG is paused on first install. Enable its schedule in Airflow when ready for daily runs at 07:00 Vietnam time.
+
+### Run once from the command line
 
 ```sh
 docker compose run --rm --build etl python scheduler.py --once
-docker compose --profile etl up -d --build etl
-docker compose logs -f etl
 ```
 
-The scheduler runs at startup and at 07:00 Vietnam time each day. `INGEST_SOURCES` selects any combination of `careerviet,topdev,arbeitnow`. The connectors collect a bounded sample. A crawler that cannot identify listings, or that loses part of a requested batch, fails closed. A valid empty API response is allowed. If a selected source fails, the scheduled run keeps the last published snapshot and records each source attempt in `ingestion_runs`. Successful source writes to raw remain available for a later retry. The log includes skipped records and reconciliation counts.
+In this command, `INGEST_SOURCES` selects any combination of `careerviet,topdev,arbeitnow`. The connectors collect a bounded sample. A crawler that cannot identify listings, or that loses part of a requested batch, fails closed. A valid empty API response is allowed. If a selected source fails, the run keeps the last published snapshot and records each source attempt in `ingestion_runs`. Successful source writes to raw remain available for a later retry.
 
-If a run fails, check the source and error in the ETL logs. Confirm whether the source changed its HTML, returned a rate limit, or timed out. Once it recovers, rerun `scheduler.py --once`. If the source is unavailable for longer, you can explicitly select the remaining sources in `.env`. Historical postings already collected from the unavailable source remain in the reports. For a refresh from existing raw data, stop the scheduler first and run `python pipeline.py` in the ETL service.
+Pause Airflow and wait for any active run before using the command-line flow. The legacy APScheduler service is still available for existing installations. Run only one scheduler against the same data.
 
 ## Data and access rules
 
